@@ -26,15 +26,17 @@ struct MixedP
 end
 
 @testset "roundtrip on isbits payloads" begin
-    for p in (1.0,
-              (1.0, 2.0, 3.0),
-              (a = 1.0, b = 2, c = 3.5f0),
-              PendulumP(9.81, 1.0, 0.5),
-              LotkaP(1.5, 1.0, 3.0, 1.0),
-              MixedP(Int32(7), true, 3.14, 2.5f0),
-              ntuple(i -> Float64(i), Val(8)))
+    for p in (
+            1.0,
+            (1.0, 2.0, 3.0),
+            (a = 1.0, b = 2, c = 3.5f0),
+            PendulumP(9.81, 1.0, 0.5),
+            LotkaP(1.5, 1.0, 3.0, 1.0),
+            MixedP(Int32(7), true, 3.14, 2.5f0),
+            ntuple(i -> Float64(i), Val(8)),
+        )
         op = pack(p)
-        T  = typeof(p)
+        T = typeof(p)
         @test op isa OpaqueParams
         @test length(op) == sizeof(T)
         @test unpack(op, T) === p
@@ -99,7 +101,7 @@ end
 
 @testset "type stability and allocation-freedom in a callback" begin
     op = pack(PendulumP(9.81, 1.0, 0.5))
-    u  = [0.1, 0.0]
+    u = [0.1, 0.0]
     du = zero(u)
 
     # warm up

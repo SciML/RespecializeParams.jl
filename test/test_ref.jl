@@ -37,13 +37,13 @@ end
 # Identity preservation: mutating the payload propagates through the ref.
 # ---------------------------------------------------------------------------
 @testset "OpaqueRef preserves identity (mutation propagates)" begin
-    v   = [1.0, 2.0, 3.0]
-    op  = pack_any(v)
+    v = [1.0, 2.0, 3.0]
+    op = pack_any(v)
     @test unpack(op, Vector{Float64}) === v
     v[1] = 99.0
     @test unpack(op, Vector{Float64})[1] == 99.0
 
-    m   = MutP(1.5, 7)
+    m = MutP(1.5, 7)
     op2 = pack_any(m)
     m.a = 42.0
     @test unpack(op2, MutP).a == 42.0
@@ -72,7 +72,7 @@ end
 
 @testset "OpaqueRef: type-stable and alloc-free in a callback" begin
     op = pack_any(VecP([1.0, 0.5, 0.25], 0.1))
-    u  = [1.0, 0.5]
+    u = [1.0, 0.5]
     du = zero(u)
     rhs_vec!(du, u, op, 0.0)        # warm
     @inferred unpack(op, VecP)

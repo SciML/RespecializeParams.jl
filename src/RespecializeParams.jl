@@ -1,7 +1,7 @@
 module RespecializeParams
 
 export OpaqueParams, OpaqueRef,
-       pack, pack_any, unpack, unsafe_unpack, unpack_checked, repack!
+    pack, pack_any, unpack, unsafe_unpack, unpack_checked, repack!
 
 """
     OpaqueParams
@@ -57,8 +57,11 @@ stack when used in a typical numerical kernel.
 """
 @inline function unpack(op::OpaqueParams, ::Type{T}) where {T}
     _check_isbits(T)
-    sizeof(T) == length(op.bytes) || throw(ArgumentError(
-        "size mismatch: $T is $(sizeof(T)) bytes, OpaqueParams holds $(length(op.bytes))"))
+    sizeof(T) == length(op.bytes) || throw(
+        ArgumentError(
+            "size mismatch: $T is $(sizeof(T)) bytes, OpaqueParams holds $(length(op.bytes))"
+        )
+    )
     return unsafe_unpack(op, T)
 end
 
@@ -81,8 +84,11 @@ Like `unpack` but additionally verifies that `T` matches the type used at `pack`
 time via `objectid`. Slightly more defensive; same big-O cost.
 """
 @inline function unpack_checked(op::OpaqueParams, ::Type{T}) where {T}
-    objectid(T) == op.typeid || throw(ArgumentError(
-        "typeid mismatch: OpaqueParams was packed with a different concrete type"))
+    objectid(T) == op.typeid || throw(
+        ArgumentError(
+            "typeid mismatch: OpaqueParams was packed with a different concrete type"
+        )
+    )
     return unpack(op, T)
 end
 
@@ -95,8 +101,11 @@ container.
 """
 function repack!(op::OpaqueParams, p::T) where {T}
     _check_isbits(T)
-    sizeof(T) == length(op.bytes) || throw(ArgumentError(
-        "size mismatch: $T is $(sizeof(T)) bytes, OpaqueParams holds $(length(op.bytes))"))
+    sizeof(T) == length(op.bytes) || throw(
+        ArgumentError(
+            "size mismatch: $T is $(sizeof(T)) bytes, OpaqueParams holds $(length(op.bytes))"
+        )
+    )
     r = Ref(p)
     GC.@preserve r op begin
         dst = Ptr{T}(pointer(op.bytes))
@@ -109,8 +118,10 @@ end
 Base.length(op::OpaqueParams) = length(op.bytes)
 
 function Base.show(io::IO, op::OpaqueParams)
-    print(io, "OpaqueParams(", length(op.bytes), " bytes, typeid=0x",
-          string(op.typeid; base = 16), ")")
+    return print(
+        io, "OpaqueParams(", length(op.bytes), " bytes, typeid=0x",
+        string(op.typeid; base = 16), ")"
+    )
 end
 
 # ---------------------------------------------------------------------------
@@ -173,8 +184,11 @@ end
 Like `unpack` but also verifies `T` matches what was packed via `objectid`.
 """
 @inline function unpack_checked(op::OpaqueRef, ::Type{T}) where {T}
-    objectid(T) == op.typeid || throw(ArgumentError(
-        "typeid mismatch: OpaqueRef was packed with a different concrete type"))
+    objectid(T) == op.typeid || throw(
+        ArgumentError(
+            "typeid mismatch: OpaqueRef was packed with a different concrete type"
+        )
+    )
     return unpack(op, T)
 end
 
@@ -186,15 +200,18 @@ type as the original (so the wrapper's `typeid` remains valid). Use `pack_any`
 to make a new container with a different payload type.
 """
 function repack!(op::OpaqueRef, x::T) where {T}
-    objectid(T) == op.typeid || throw(ArgumentError(
-        "repack! on OpaqueRef requires the same concrete type as pack_any " *
-        "(got $T). Use pack_any to make a new container."))
+    objectid(T) == op.typeid || throw(
+        ArgumentError(
+            "repack! on OpaqueRef requires the same concrete type as pack_any " *
+                "(got $T). Use pack_any to make a new container."
+        )
+    )
     op.ref[] = x
     return op
 end
 
 function Base.show(io::IO, op::OpaqueRef)
-    print(io, "OpaqueRef(typeid=0x", string(op.typeid; base = 16), ")")
+    return print(io, "OpaqueRef(typeid=0x", string(op.typeid; base = 16), ")")
 end
 
 end # module
