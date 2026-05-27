@@ -1,0 +1,132 @@
+using RespecializeParams
+using Test
+
+# ---------------------------------------------------------------------------
+# Roundtrip on assorted isbits payloads
+# ---------------------------------------------------------------------------
+
+struct PendulumP
+    g::Float64
+    L::Float64
+    m::Float64
+end
+
+struct LotkaP
+    α::Float64
+    β::Float64
+    γ::Float64
+    δ::Float64
+end
+
+struct MixedP
+    n::Int32
+    flag::Bool
+    x::Float64
+    y::Float32
+end
+
+@testset "roundtrip on isbits payloads" begin
+    for p in (1.0,
+              (1.0, 2.0, 3.0),
+              (a = 1.0, b = 2, c = 3.5f0),
+              PendulumP(9.81, 1.0, 0.5),
+              LotkaP(1.5, 1.0, 3.0, 1.0),
+              MixedP(Int32(7), true, 3.14, 2.5f0),
+              ntuple(i -> Float64(i), Val(8)))
+        op = pack(p)
+        T  = typeof(p)
+        @test op isa OpaqueParams
+        @test length(op) == sizeof(T)
+        @test unpack(op, T) === p
+        @test unsafe_unpack(op, T) === p
+        @test unpack_checked(op, T) === p
+    end
+end
+
+# ---------------------------------------------------------------------------
+# Uniform wrapper type — different payload types pack to the SAME container type
+# ---------------------------------------------------------------------------
+
+@testset "uniform wrapper type" begin
+    op1 = pack(PendulumP(9.81, 1.0, 0.5))
+    op2 = pack(LotkaP(1.5, 1.0, 3.0, 1.0))
+    op3 = pack((a = 1.0, b = 2))
+
+    @test typeof(op1) === typeof(op2) === typeof(op3) === OpaqueParams
+    # but the underlying byte lengths and typeids differ
+    @test length(op1) != length(op2)
+    @test op1.typeid != op2.typeid != op3.typeid
+end
+
+# ---------------------------------------------------------------------------
+# Error paths
+# ---------------------------------------------------------------------------
+
+mutable struct NotBits
+    x::Vector{Float64}
+end
+
+@testset "error paths" begin
+    @test_throws ArgumentError pack(NotBits([1.0, 2.0]))
+
+    op = pack(PendulumP(9.81, 1.0, 0.5))
+    # size mismatch
+    @test_throws ArgumentError unpack(op, LotkaP)
+    # typeid mismatch
+    bad = pack((a = 1.0, b = 2.0, c = 3.0))   # same byte count as PendulumP (24)
+    @test length(bad) == sizeof(PendulumP)
+    @test_throws ArgumentError unpack_checked(bad, PendulumP)
+end
+
+# ---------------------------------------------------------------------------
+# Type stability and zero-allocation of unpack inside a real callback
+# ---------------------------------------------------------------------------
+
+# A user f that pretends it's a SciML rhs.
+function rhs!(du, u, op::OpaqueParams, t)
+    p = unpack(op, PendulumP)
+    @inbounds du[1] = u[2]
+    @inbounds du[2] = -(p.g / p.L) * sin(u[1])
+    return nothing
+end
+
+function rhs_unsafe!(du, u, op::OpaqueParams, t)
+    p = unsafe_unpack(op, PendulumP)
+    @inbounds du[1] = u[2]
+    @inbounds du[2] = -(p.g / p.L) * sin(u[1])
+    return nothing
+end
+
+@testset "type stability and allocation-freedom in a callback" begin
+    op = pack(PendulumP(9.81, 1.0, 0.5))
+    u  = [0.1, 0.0]
+    du = zero(u)
+
+    # warm up
+    rhs!(du, u, op, 0.0)
+    rhs_unsafe!(du, u, op, 0.0)
+
+    # type stability
+    @inferred unpack(op, PendulumP)
+    @inferred unsafe_unpack(op, PendulumP)
+
+    # allocations
+    @test 0 == @allocated rhs!(du, u, op, 0.0)
+    @test 0 == @allocated rhs_unsafe!(du, u, op, 0.0)
+end
+
+# ---------------------------------------------------------------------------
+# repack! mutates in place without changing the container's identity / size
+# ---------------------------------------------------------------------------
+
+@testset "repack!" begin
+    op = pack(PendulumP(9.81, 1.0, 0.5))
+    bytes_id = objectid(op.bytes)
+    repack!(op, PendulumP(3.7, 2.0, 1.0))
+    @test objectid(op.bytes) == bytes_id          # same backing array
+    @test unpack(op, PendulumP) === PendulumP(3.7, 2.0, 1.0)
+
+    # repack with a different-size type errors (LotkaP is 4×Float64 = 32 bytes, PendulumP is 24)
+    @test sizeof(LotkaP) != sizeof(PendulumP)
+    @test_throws ArgumentError repack!(op, LotkaP(1.0, 2.0, 3.0, 4.0))
+end
