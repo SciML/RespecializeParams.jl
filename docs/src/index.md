@@ -84,10 +84,10 @@ problems.
 ```@docs
 OpaqueParams
 pack
-unpack(::OpaqueParams, ::Type)
+unpack(::OpaqueParams, ::Type{T}) where {T}
 unsafe_unpack
-unpack_checked(::OpaqueParams, ::Type)
-repack!(::OpaqueParams, ::Any)
+unpack_checked(::OpaqueParams, ::Type{T}) where {T}
+repack!(::OpaqueParams, ::T) where {T}
 ```
 
 ### `OpaqueRef` (any payload)
@@ -95,9 +95,9 @@ repack!(::OpaqueParams, ::Any)
 ```@docs
 OpaqueRef
 pack_any
-unpack(::OpaqueRef, ::Type)
-unpack_checked(::OpaqueRef, ::Type)
-repack!(::OpaqueRef, ::Any)
+unpack(::OpaqueRef, ::Type{T}) where {T}
+unpack_checked(::OpaqueRef, ::Type{T}) where {T}
+repack!(::OpaqueRef, ::T) where {T}
 ```
 
 ## Choosing between `OpaqueParams` and `OpaqueRef`
