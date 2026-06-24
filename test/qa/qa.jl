@@ -1,19 +1,24 @@
-using SafeTestsets
+using RespecializeParams
+using SciMLTesting
+using Aqua
+using ExplicitImports
+using JET
+using Test
 
-@safetestset "Aqua" begin
-    using RespecializeParams
-    using Aqua
-    using Test
-    # deps_compat extras sub-check disabled: the package omits [compat] entries
-    # for the Aqua/JET test-only [extras]. Tracked in
-    # https://github.com/SciML/RespecializeParams.jl/issues/10
-    Aqua.test_all(RespecializeParams; deps_compat = (; check_extras = false))
-    @test_broken false  # Aqua deps_compat: missing [compat] for Aqua/JET extras — tracked in https://github.com/SciML/RespecializeParams.jl/issues/10
-end
-
-@safetestset "JET" begin
-    using RespecializeParams
-    using JET
-    using Test
-    JET.test_package(RespecializeParams; target_defined_modules = true)
-end
+# `Base.RefValue` is not part of Base's public API, but `OpaqueRef` deliberately
+# stores its payload in a `Base.RefValue{Any}` field: `Ref{Any}` (the public name)
+# is an abstract type, so a `ref::Ref{Any}` field would be non-concrete and defeat
+# this package's whole purpose (type-stable, fixed-layout containers). There is no
+# public Base name for the concrete boxed-`Any` slot, so the lone
+# all_qualified_accesses_are_public violation is ignored here, scoped to that one
+# check and that one name only.
+run_qa(
+    RespecializeParams;
+    Aqua = Aqua,
+    JET = JET,
+    jet = true,
+    jet_kwargs = (; target_modules = (RespecializeParams,)),
+    ExplicitImports = ExplicitImports,
+    explicit_imports = true,
+    ei_kwargs = (; all_qualified_accesses_are_public = (; ignore = (:RefValue,))),
+)
