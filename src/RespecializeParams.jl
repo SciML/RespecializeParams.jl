@@ -223,17 +223,21 @@ end
 
 Callable wrapper that recovers a concrete parameter type `P` at the boundary of
 a user callback. `OpaqueVoid` holds a function `f` and, when invoked with an
-[`OpaqueParams`](@ref) in the parameter slot, unpacks it back to a `P` value
-with [`unsafe_unpack`](@ref) before forwarding to `f`. It returns `nothing`,
-mirroring the in-place SciML callback convention (the result is written into
-the first argument).
+[`OpaqueParams`](@ref) or [`OpaqueRef`](@ref) in the parameter slot, unpacks it
+back to a `P` value before forwarding to `f`. It returns `nothing`, mirroring
+the in-place SciML callback convention (the result is written into the first
+argument).
 
-The purpose is to keep a callable's *type signature* uniform on `OpaqueParams`
-regardless of the underlying payload type `P`, so that a single
+The purpose is to keep a callable's *type signature* uniform on the container
+type regardless of the underlying payload type `P`, so that a single
 compiled/precompiled code path — e.g. a solver's function-wrapped RHS — is
-shared across problems whose parameter struct types differ. The unpack is a
-single `unsafe_load` and is type-stable with no allocation, so the wrapped `f`
-still runs fully specialized on `P`.
+shared across problems whose parameter struct types differ. Both containers
+give a fixed wrapper type: `OpaqueParams` unifies all `isbits` payloads
+(unpacked with [`unsafe_unpack`](@ref), a single `unsafe_load`) and `OpaqueRef`
+unifies all payloads (unpacked with [`unpack`](@ref), a pointer load + type-tag
+assertion). Either way the unpack is type-stable and allocation-free for the
+container's intended payloads, so the wrapped `f` still runs fully specialized
+on `P`.
 
 Two SciML in-place shapes are supported, both with the parameter in the third
 positional slot:
@@ -275,6 +279,21 @@ end
 # 3-arg SciML shape: f(a, u, p) with p in slot 3.
 @inline function (v::OpaqueVoid{P})(a, u, op::OpaqueParams) where {P}
     p = unsafe_unpack(op, P)
+    v.f(a, u, p)
+    return nothing
+end
+
+# OpaqueRef variants — for non-isbits payloads. `unpack(::OpaqueRef, P)` is the
+# minimal type-stable read (pointer load + `::P` assertion; no `unsafe_unpack`
+# exists or is needed for OpaqueRef).
+@inline function (v::OpaqueVoid{P})(a, u, op::OpaqueRef, t) where {P}
+    p = unpack(op, P)
+    v.f(a, u, p, t)
+    return nothing
+end
+
+@inline function (v::OpaqueVoid{P})(a, u, op::OpaqueRef) where {P}
+    p = unpack(op, P)
     v.f(a, u, p)
     return nothing
 end

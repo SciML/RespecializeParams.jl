@@ -145,6 +145,12 @@ pendulum_rhs!(du, u, p::PendulumP, t) = (
 # in-place nonlinear residual shape: res!(du, u, p)
 lotka_res!(res, u, p::LotkaP) = (@inbounds res[1] = p.α * u[1] - p.β; nothing)
 
+# A non-isbits parameter type (has a Vector field), routed through OpaqueRef.
+struct VecP
+    ks::Vector{Float64}
+end
+vecp_rhs!(du, u, p::VecP, t) = (@inbounds du[1] = -p.ks[1] * u[1]; nothing)
+
 @testset "OpaqueVoid forwards after unpacking" begin
     p = PendulumP(9.81, 1.0, 0.5)
     op = pack(p)
@@ -165,6 +171,29 @@ lotka_res!(res, u, p::LotkaP) = (@inbounds res[1] = p.α * u[1] - p.β; nothing)
     res = zeros(1)
     wq(res, [2.0], opq)
     @test res[1] ≈ q.α * 2.0 - q.β
+end
+
+@testset "OpaqueVoid through OpaqueRef (non-isbits payload)" begin
+    p = VecP([2.0])
+    op = pack_any(p)                      # non-isbits → OpaqueRef
+    @test op isa OpaqueRef
+    w = OpaqueVoid(VecP, vecp_rhs!)
+
+    du = [0.0]
+    w(du, [3.0], op, 0.0)                  # 4-arg shape on OpaqueRef
+    @test du[1] ≈ -6.0
+
+    # 3-arg shape on OpaqueRef
+    res_fn!(res, u, p::VecP) = (@inbounds res[1] = p.ks[1] - u[1]; nothing)
+    wr = OpaqueVoid(VecP, res_fn!)
+    res = [0.0]
+    wr(res, [0.5], op)
+    @test res[1] ≈ 1.5
+
+    # OpaqueRef preserves identity, so payload mutation is visible through the wrapper
+    p.ks[1] = 10.0
+    w(du, [1.0], op, 0.0)
+    @test du[1] ≈ -10.0
 end
 
 @testset "OpaqueVoid type is uniform across payload types" begin
