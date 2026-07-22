@@ -1,6 +1,6 @@
 module RespecializeParams
 
-export OpaqueParams, OpaqueRef,
+export OpaqueParams, OpaqueRef, OpaqueVoid,
     pack, pack_any, unpack, unsafe_unpack, unpack_checked, repack!
 
 """
@@ -212,6 +212,75 @@ end
 
 function Base.show(io::IO, op::OpaqueRef)
     return print(io, "OpaqueRef(typeid=0x", string(op.typeid; base = 16), ")")
+end
+
+# ---------------------------------------------------------------------------
+# OpaqueVoid — callable wrapper that recovers the concrete type at the f-boundary
+# ---------------------------------------------------------------------------
+
+"""
+    OpaqueVoid{P, F}
+
+Callable wrapper that recovers a concrete parameter type `P` at the boundary of
+a user callback. `OpaqueVoid` holds a function `f` and, when invoked with an
+[`OpaqueParams`](@ref) in the parameter slot, unpacks it back to a `P` value
+with [`unsafe_unpack`](@ref) before forwarding to `f`. It returns `nothing`,
+mirroring the in-place SciML callback convention (the result is written into
+the first argument).
+
+The purpose is to keep a callable's *type signature* uniform on `OpaqueParams`
+regardless of the underlying payload type `P`, so that a single
+compiled/precompiled code path — e.g. a solver's function-wrapped RHS — is
+shared across problems whose parameter struct types differ. The unpack is a
+single `unsafe_load` and is type-stable with no allocation, so the wrapped `f`
+still runs fully specialized on `P`.
+
+Two SciML in-place shapes are supported, both with the parameter in the third
+positional slot:
+
+  - `f(a, u, p, t)` — e.g. an ODE RHS `rhs!(du, u, p, t)`, Jacobian
+    `jac!(J, u, p, t)`, or time gradient `tgrad!(dT, u, p, t)`.
+  - `f(a, u, p)` — e.g. an in-place nonlinear residual `res!(du, u, p)`.
+
+`P` must match the concrete type that was `pack`ed into the `OpaqueParams`;
+[`unsafe_unpack`](@ref) does not check. Construct with `OpaqueVoid(P, f)`.
+
+```jldoctest
+julia> using RespecializeParams
+
+julia> nt = (k = 2.0,);
+
+julia> op = pack(nt);
+
+julia> w = OpaqueVoid(typeof(nt), (du, u, p, t) -> (du[1] = -p.k * u[1]; nothing));
+
+julia> du = [0.0]; w(du, [1.0], op, 0.0); du
+1-element Vector{Float64}:
+ -2.0
+```
+"""
+struct OpaqueVoid{P, F}
+    f::F
+end
+
+OpaqueVoid(::Type{P}, f::F) where {P, F} = OpaqueVoid{P, F}(f)
+
+# 4-arg SciML shape: f(a, u, p, t) with p in slot 3.
+@inline function (v::OpaqueVoid{P})(a, u, op::OpaqueParams, t) where {P}
+    p = unsafe_unpack(op, P)
+    v.f(a, u, p, t)
+    return nothing
+end
+
+# 3-arg SciML shape: f(a, u, p) with p in slot 3.
+@inline function (v::OpaqueVoid{P})(a, u, op::OpaqueParams) where {P}
+    p = unsafe_unpack(op, P)
+    v.f(a, u, p)
+    return nothing
+end
+
+function Base.show(io::IO, ::OpaqueVoid{P, F}) where {P, F}
+    return print(io, "OpaqueVoid{", P, "}(", F, ")")
 end
 
 end # module

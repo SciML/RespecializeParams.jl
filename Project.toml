@@ -1,7 +1,7 @@
 name = "RespecializeParams"
 uuid = "9fe22ead-9e00-4db2-8b46-706a60d40f5e"
 authors = ["Chris Rackauckas <accounts@chrisrackauckas.com>"]
-version = "0.1.2"
+version = "0.1.3"
 
 [deps]
 

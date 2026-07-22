@@ -132,3 +132,60 @@ end
     @test sizeof(LotkaP) != sizeof(PendulumP)
     @test_throws ArgumentError repack!(op, LotkaP(1.0, 2.0, 3.0, 4.0))
 end
+
+# ---------------------------------------------------------------------------
+# OpaqueVoid — recovers the concrete type at the callback boundary
+# ---------------------------------------------------------------------------
+
+pendulum_rhs!(du, u, p::PendulumP, t) = (
+    @inbounds du[1] = u[2];
+    @inbounds du[2] = -(p.g / p.L) * sin(u[1]); nothing
+)
+
+# in-place nonlinear residual shape: res!(du, u, p)
+lotka_res!(res, u, p::LotkaP) = (@inbounds res[1] = p.α * u[1] - p.β; nothing)
+
+@testset "OpaqueVoid forwards after unpacking" begin
+    p = PendulumP(9.81, 1.0, 0.5)
+    op = pack(p)
+    w = OpaqueVoid(PendulumP, pendulum_rhs!)
+    @test w isa OpaqueVoid{PendulumP}
+
+    du = zeros(2)
+    u = [0.3, 0.0]
+    w(du, u, op, 0.0)
+    ref = zeros(2)
+    pendulum_rhs!(ref, u, p, 0.0)
+    @test du == ref
+
+    # 3-arg (nonlinear residual) shape
+    q = LotkaP(1.5, 0.5, 0.0, 0.0)
+    opq = pack(q)
+    wq = OpaqueVoid(LotkaP, lotka_res!)
+    res = zeros(1)
+    wq(res, [2.0], opq)
+    @test res[1] ≈ q.α * 2.0 - q.β
+end
+
+@testset "OpaqueVoid type is uniform across payload types" begin
+    # Different concrete P give different OpaqueVoid types (P is a type param),
+    # but the *argument* type at the call site is always OpaqueParams — that is
+    # the property callers rely on to share one compiled path.
+    w1 = OpaqueVoid(PendulumP, pendulum_rhs!)
+    @test typeof(pack(PendulumP(1.0, 1.0, 1.0))) ===
+        typeof(pack(LotkaP(1.0, 2.0, 3.0, 4.0))) === OpaqueParams
+    # method dispatches on OpaqueParams regardless of the packed payload
+    m = only(methods(w1, Tuple{Any, Any, OpaqueParams, Any}))
+    @test m.sig <: Tuple{OpaqueVoid, Any, Any, OpaqueParams, Any}
+end
+
+@testset "OpaqueVoid is allocation-free" begin
+    op = pack(PendulumP(9.81, 1.0, 0.5))
+    w = OpaqueVoid(PendulumP, pendulum_rhs!)
+    du = zeros(2)
+    u = [0.3, 0.0]
+    # measure behind a function barrier so @allocated does not capture
+    # non-const global access
+    meas(w, du, u, op, t) = (w(du, u, op, t); @allocated w(du, u, op, t))
+    @test meas(w, du, u, op, 0.0) == 0
+end
