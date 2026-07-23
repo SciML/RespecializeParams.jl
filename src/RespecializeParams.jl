@@ -1,7 +1,8 @@
 module RespecializeParams
 
 export OpaqueParams, OpaqueRef, OpaqueVoid,
-    pack, pack_any, unpack, unsafe_unpack, unpack_checked, repack!
+    pack, pack_any, pack_auto, unpack, unsafe_unpack, unpack_checked, repack!,
+    opaque_container_type, opaque_signature, wrap_void_opaque
 
 """
     OpaqueParams
@@ -301,5 +302,62 @@ end
 function Base.show(io::IO, ::OpaqueVoid{P, F}) where {P, F}
     return print(io, "OpaqueVoid{", P, "}(", F, ")")
 end
+
+# ---------------------------------------------------------------------------
+# Solver-integration helpers: choose the container, pack, and build the
+# de-specialized callback signature. These are the shared pieces a SciML solver
+# stack needs to install `OpaqueVoid` under the `AutoDePSpecialize`
+# specialization level (used by DiffEqBase and NonlinearSolve).
+# ---------------------------------------------------------------------------
+
+"""
+    opaque_container_type(::Type{P}) -> Type
+
+The fixed opaque container type that erases a parameter of concrete type `P`:
+[`OpaqueParams`](@ref) when `P` is an `isbitstype` (packed via [`pack`](@ref)),
+otherwise [`OpaqueRef`](@ref) (packed via [`pack_any`](@ref)). This is the type
+that appears in the parameter slot of a de-specialized callback signature.
+"""
+@inline opaque_container_type(::Type{P}) where {P} =
+    isbitstype(P) ? OpaqueParams : OpaqueRef
+
+"""
+    pack_auto(p) -> OpaqueParams or OpaqueRef
+
+Pack `p` into whichever container [`opaque_container_type`](@ref) selects for its
+type: [`pack`](@ref) for `isbits` payloads, [`pack_any`](@ref) otherwise. A
+uniform "erase this parameter" entry point regardless of the payload's bits-ness.
+"""
+@inline pack_auto(p) = isbits(p) ? pack(p) : pack_any(p)
+
+"""
+    opaque_signature(::Type{S}, ::Type{C}) -> Type
+
+Return the SciML in-place callback signature `S` (a `Tuple` type) with its
+parameter slot — the third positional argument — replaced by the opaque
+container type `C`. Supports the 4-argument `f(out, u, p, t)` and 3-argument
+`f(out, u, p)` shapes handled by [`OpaqueVoid`](@ref).
+"""
+@inline opaque_signature(::Type{Tuple{A, B, P, T}}, ::Type{C}) where {A, B, P, T, C} =
+    Tuple{A, B, C, T}
+@inline opaque_signature(::Type{Tuple{A, B, P}}, ::Type{C}) where {A, B, P, C} =
+    Tuple{A, B, C}
+
+"""
+    wrap_void_opaque(ff, ::Type{P}, sigs::Tuple) -> FunctionWrappersWrapper
+
+Install `OpaqueVoid(P, ff)` behind a `FunctionWrappersWrapper` whose signature(s)
+have their parameter slot de-specialized to [`opaque_container_type`](@ref)`(P)`.
+`sigs` is a tuple of `Tuple` types — each the *natural* `(out, u, p, t)` or
+`(out, u, p)` signature — whose `p` slot is replaced by the opaque container
+type via [`opaque_signature`](@ref). The result is a callable that a solver
+dispatches on uniformly regardless of `P`, unpacking back to `P` on each call.
+
+This is the shared installer used by SciML solver stacks (DiffEqBase,
+NonlinearSolve) under the `AutoDePSpecialize` specialization level. It is
+available only when `FunctionWrappersWrappers` is loaded (provided by the
+`RespecializeParamsFunctionWrappersWrappersExt` extension).
+"""
+function wrap_void_opaque end
 
 end # module

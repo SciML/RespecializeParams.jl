@@ -218,3 +218,73 @@ end
     meas(w, du, u, op, t) = (w(du, u, op, t); @allocated w(du, u, op, t))
     @test meas(w, du, u, op, 0.0) == 0
 end
+
+# ---------------------------------------------------------------------------
+# Solver-integration helpers: container selection, packing, signature surgery
+# ---------------------------------------------------------------------------
+
+@testset "opaque_container_type / pack_auto" begin
+    @test opaque_container_type(PendulumP) === OpaqueParams   # isbits
+    @test opaque_container_type(VecP) === OpaqueRef           # non-isbits
+    @test opaque_container_type(NamedTuple{(:k,), Tuple{Float64}}) === OpaqueParams
+
+    @test pack_auto(PendulumP(9.81, 1.0, 0.5)) isa OpaqueParams
+    @test pack_auto(VecP([1.0])) isa OpaqueRef
+    # roundtrip through the auto-selected container
+    @test unpack(pack_auto(PendulumP(9.81, 1.0, 0.5)), PendulumP) ===
+        PendulumP(9.81, 1.0, 0.5)
+    @test unpack(pack_auto(VecP([2.0])), VecP).ks == [2.0]
+end
+
+@testset "opaque_signature substitutes the p slot" begin
+    # 4-arg (out, u, p, t)
+    @test opaque_signature(
+        Tuple{Vector{Float64}, Vector{Float64}, PendulumP, Float64}, OpaqueParams
+    ) === Tuple{Vector{Float64}, Vector{Float64}, OpaqueParams, Float64}
+    # 3-arg (out, u, p)
+    @test opaque_signature(Tuple{Vector{Float64}, Vector{Float64}, LotkaP}, OpaqueParams) ===
+        Tuple{Vector{Float64}, Vector{Float64}, OpaqueParams}
+    # OpaqueRef container
+    @test opaque_signature(Tuple{Vector{Float64}, Vector{Float64}, VecP, Float64}, OpaqueRef) ===
+        Tuple{Vector{Float64}, Vector{Float64}, OpaqueRef, Float64}
+end
+
+# `wrap_void_opaque` lives in the FunctionWrappersWrappers extension.
+using FunctionWrappersWrappers
+
+@testset "wrap_void_opaque installs OpaqueVoid behind a FunctionWrapper" begin
+    p = PendulumP(9.81, 1.0, 0.5)
+    natural_sig = Tuple{Vector{Float64}, Vector{Float64}, PendulumP, Float64}
+    w = wrap_void_opaque(pendulum_rhs!, PendulumP, (natural_sig,))
+    @test w isa FunctionWrappersWrappers.FunctionWrappersWrapper
+
+    # dispatches on the de-specialized (OpaqueParams in slot 3) signature
+    op = pack(p)
+    du = zeros(2)
+    u = [0.3, 0.0]
+    w(du, u, op, 0.0)
+    ref = zeros(2)
+    pendulum_rhs!(ref, u, p, 0.0)
+    @test du == ref
+
+    # two different isbits payload types produce the SAME wrapper type,
+    # which is the whole point (one compiled path shared across parameter types)
+    w2 = wrap_void_opaque(
+        (du, u, q::LotkaP, t) -> (du[1] = q.α; nothing), LotkaP,
+        (Tuple{Vector{Float64}, Vector{Float64}, LotkaP, Float64},),
+    )
+    @test typeof(w) === typeof(w2)
+
+    # 3-arg residual shape
+    wr = wrap_void_opaque(lotka_res!, LotkaP, (Tuple{Vector{Float64}, Vector{Float64}, LotkaP},))
+    res = zeros(1)
+    q = LotkaP(1.5, 0.5, 0.0, 0.0)
+    wr(res, [2.0], pack(q))
+    @test res[1] ≈ q.α * 2.0 - q.β
+
+    # non-isbits payload → wrapper signature carries OpaqueRef, dispatches on pack_any
+    wv = wrap_void_opaque(vecp_rhs!, VecP, (Tuple{Vector{Float64}, Vector{Float64}, VecP, Float64},))
+    du2 = [0.0]
+    wv(du2, [3.0], pack_any(VecP([2.0])), 0.0)
+    @test du2[1] ≈ -6.0
+end
