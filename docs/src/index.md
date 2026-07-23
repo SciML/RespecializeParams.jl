@@ -44,18 +44,6 @@ struct LorenzP
     β::Float64
 end
 
-# Carry the payload type on the rhs (as a type parameter), not on p.
-struct OpaqueRHS{T, F} <: Function
-    f::F
-end
-OpaqueRHS(::Type{T}, f::F) where {T, F} = OpaqueRHS{T, F}(f)
-
-@inline function (r::OpaqueRHS{T})(du, u, op::OpaqueParams, t) where {T}
-    p = unpack(op, T)
-    r.f(du, u, p, t)
-    return nothing
-end
-
 function lorenz_kernel!(du, u, p::LorenzP, t)
     du[1] = p.σ * (u[2] - u[1])
     du[2] = u[1] * (p.ρ - u[3]) - u[2]
@@ -63,8 +51,11 @@ function lorenz_kernel!(du, u, p::LorenzP, t)
     return nothing
 end
 
+# `OpaqueVoid` carries the payload type `LorenzP` as a type parameter on the rhs
+# (not on `p`) and unpacks the `OpaqueParams` back to a `LorenzP` before calling
+# `lorenz_kernel!`.
 prob = ODEProblem(
-    OpaqueRHS(LorenzP, lorenz_kernel!),
+    OpaqueVoid(LorenzP, lorenz_kernel!),
     [1.0, 0.0, 0.0],
     (0.0, 5.0),
     pack(LorenzP(10.0, 28.0, 8 / 3)),
@@ -75,7 +66,9 @@ solve(prob, Tsit5())
 
 `typeof(prob.p) === OpaqueParams` regardless of which concrete payload type was
 packed, so the solver hits the same precompiled code path across all such
-problems.
+problems. [`OpaqueVoid`](@ref) is the reusable wrapper for this pattern; here it
+is applied by hand, but SciML solvers install it automatically under the
+`AutoDePSpecialize` specialization level.
 
 ## API
 
@@ -98,6 +91,24 @@ pack_any
 unpack(::OpaqueRef, ::Type{T}) where {T}
 unpack_checked(::OpaqueRef, ::Type{T}) where {T}
 repack!(::OpaqueRef, ::T) where {T}
+```
+
+### `OpaqueVoid` (callback wrapper)
+
+```@docs
+OpaqueVoid
+```
+
+### Solver-integration helpers
+
+Shared pieces a SciML solver stack uses to install `OpaqueVoid` under the
+`AutoDePSpecialize` specialization level.
+
+```@docs
+opaque_container_type
+pack_auto
+opaque_signature
+wrap_void_opaque
 ```
 
 ## Choosing between `OpaqueParams` and `OpaqueRef`
