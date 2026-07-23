@@ -102,9 +102,7 @@ OpaqueVoid
 ### Solver-integration helpers
 
 Shared pieces a SciML solver stack uses to install `OpaqueVoid` under the
-`AutoDePSpecialize` specialization level. `wrap_void_opaque` is provided by the
-`FunctionWrappersWrappers` extension (loaded automatically when that package is
-present).
+`AutoDePSpecialize` specialization level.
 
 ```@docs
 opaque_container_type

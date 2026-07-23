@@ -1,5 +1,7 @@
 module RespecializeParams
 
+import FunctionWrappersWrappers
+
 export OpaqueParams, OpaqueRef, OpaqueVoid,
     pack, pack_any, pack_auto, unpack, unsafe_unpack, unpack_checked, repack!,
     opaque_container_type, opaque_signature, wrap_void_opaque
@@ -354,10 +356,15 @@ type via [`opaque_signature`](@ref). The result is a callable that a solver
 dispatches on uniformly regardless of `P`, unpacking back to `P` on each call.
 
 This is the shared installer used by SciML solver stacks (DiffEqBase,
-NonlinearSolve) under the `AutoDePSpecialize` specialization level. It is
-available only when `FunctionWrappersWrappers` is loaded (provided by the
-`RespecializeParamsFunctionWrappersWrappersExt` extension).
+NonlinearSolve) under the `AutoDePSpecialize` specialization level.
 """
-function wrap_void_opaque end
+function wrap_void_opaque(ff, ::Type{P}, sigs::Tuple) where {P}
+    C = opaque_container_type(P)
+    opaque_sigs = map(s -> opaque_signature(s, C), sigs)
+    nothings = map(_ -> Nothing, sigs)
+    return FunctionWrappersWrappers.FunctionWrappersWrapper(
+        OpaqueVoid(P, ff), opaque_sigs, nothings,
+    )
+end
 
 end # module

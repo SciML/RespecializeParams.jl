@@ -4,12 +4,7 @@ authors = ["Chris Rackauckas <accounts@chrisrackauckas.com>"]
 version = "0.1.4"
 
 [deps]
-
-[weakdeps]
 FunctionWrappersWrappers = "77dc65aa-8811-40c2-897b-53d922fa7daf"
-
-[extensions]
-RespecializeParamsFunctionWrappersWrappersExt = "FunctionWrappersWrappers"
 
 [compat]
 FunctionWrappersWrappers = "1"
@@ -30,7 +25,6 @@ SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 SciMLTesting = "09d9d899-5365-40a9-917a-5f67fddea283"
-FunctionWrappersWrappers = "77dc65aa-8811-40c2-897b-53d922fa7daf"
 
 [targets]
-test = ["Test", "OrdinaryDiffEqTsit5", "NonlinearSolve", "SciMLBase", "JET", "SafeTestsets", "SciMLTesting", "FunctionWrappersWrappers"]
+test = ["Test", "OrdinaryDiffEqTsit5", "NonlinearSolve", "SciMLBase", "JET", "SafeTestsets", "SciMLTesting"]

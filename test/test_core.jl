@@ -249,14 +249,13 @@ end
         Tuple{Vector{Float64}, Vector{Float64}, OpaqueRef, Float64}
 end
 
-# `wrap_void_opaque` lives in the FunctionWrappersWrappers extension.
-using FunctionWrappersWrappers
+using FunctionWrappersWrappers: FunctionWrappersWrapper
 
 @testset "wrap_void_opaque installs OpaqueVoid behind a FunctionWrapper" begin
     p = PendulumP(9.81, 1.0, 0.5)
     natural_sig = Tuple{Vector{Float64}, Vector{Float64}, PendulumP, Float64}
     w = wrap_void_opaque(pendulum_rhs!, PendulumP, (natural_sig,))
-    @test w isa FunctionWrappersWrappers.FunctionWrappersWrapper
+    @test w isa FunctionWrappersWrapper
 
     # dispatches on the de-specialized (OpaqueParams in slot 3) signature
     op = pack(p)
