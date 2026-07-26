@@ -274,7 +274,7 @@ version = "0.1.0"
 
 [[deps.RespecializeParams]]
 deps = ["FunctionWrappersWrappers"]
-path = "/home/runner/work/RespecializeParams.jl/RespecializeParams.jl"
+path = "/home/runner/_work/RespecializeParams.jl/RespecializeParams.jl"
 uuid = "9fe22ead-9e00-4db2-8b46-706a60d40f5e"
 version = "2.0.0"
 
