@@ -5,11 +5,13 @@ version = "1.2.0"
 
 [deps]
 FunctionWrappersWrappers = "77dc65aa-8811-40c2-897b-53d922fa7daf"
+PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 
 [compat]
 FunctionWrappersWrappers = "1"
 JET = "0.9, 0.10, 0.11"
 NonlinearSolve = "4"
+PrecompileTools = "1.2"
 OrdinaryDiffEqTsit5 = "2"
 SafeTestsets = "0.1, 1"
 SciMLBase = "3"

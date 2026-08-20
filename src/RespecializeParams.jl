@@ -562,4 +562,24 @@ function wrap_void_opaque(ff, ::Type{P}, sigs::Tuple) where {P}
     )
 end
 
+using PrecompileTools: @compile_workload, @setup_workload
+
+@setup_workload begin
+    @compile_workload begin
+        payload_value = (rate = 2.0, count = 3)
+        packed = pack(payload_value)
+        unpack(packed, typeof(payload_value))
+        unpack_checked(packed, typeof(payload_value))
+        opaque_container_type(typeof(payload_value))
+        pack_auto(payload_value)
+        opaque_signature(
+            Tuple{Vector{Float64}, Vector{Float64}, typeof(payload_value), Float64},
+            OpaqueParams,
+        )
+        ref_packed = pack_any([1, 2])
+        unpack(ref_packed, Vector{Int})
+        pack_auto([1, 2])
+    end
+end
+
 end # module
